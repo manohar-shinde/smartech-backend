@@ -1,4 +1,5 @@
-import { Body, Controller, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { UsersService } from './users.service';
 import { Public } from 'src/auth/public.decorator';
 
@@ -8,32 +9,53 @@ export class UsersController {
 
   @Public()
   @Post('register')
-  create(@Body() body: any) {
-    return this.usersService.createUser(body);
+  async create(@Body() body: any, @Res() res: Response) {
+    const result = await this.usersService.createUser(body);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(201).json(result);
   }
 
   @Public()
   @Post('login')
-  login(@Body() body: any) {
+  async login(@Body() body: any, @Res() res: Response) {
     const { email, password } = body;
-    return this.usersService.loginUser(email, password);
+    const result = await this.usersService.loginUser(email, password);
+    if (!result.success) {
+      return res.status(401).json(result);
+    }
+    return res.status(200).json(result);
   }
 
   @Public()
   @Post('refresh')
-  refresh(@Body() body: { refreshToken: string }) {
-    return this.usersService.refreshUserSession(body?.refreshToken);
+  async refresh(@Body() body: { refreshToken: string }, @Res() res: Response) {
+    const result = await this.usersService.refreshUserSession(
+      body?.refreshToken,
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
   }
 
   @Post('logout')
-  logout(
+  async logout(
     @Headers('authorization') authorization: string,
     @Body() body: { refreshToken: string },
+    @Res() res: Response,
   ) {
     const sessionToken = authorization?.startsWith('Bearer ')
       ? authorization.slice(7)
       : '';
-
-    return this.usersService.logoutUser(sessionToken, body?.refreshToken);
+    const result = await this.usersService.logoutUser(
+      sessionToken,
+      body?.refreshToken,
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
   }
 }

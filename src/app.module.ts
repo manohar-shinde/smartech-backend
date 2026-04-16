@@ -9,6 +9,7 @@ import { OrganizationModule } from './organization/organization.module';
 import { SitesModule } from './sites/sites.module';
 import { StaffModule } from './staff/staff.module';
 import { PartsModule } from './parts/parts.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PartsModule } from './parts/parts.module';
     SitesModule,
     StaffModule,
     PartsModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [

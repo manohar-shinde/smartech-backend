@@ -5,7 +5,7 @@ import { supabase } from 'src/supabase/supabase.client';
 
 @Injectable()
 export class ErrCodeService {
-  async create(createErrCodeDto: CreateErrCodeDto) {
+  async create(createErrCodeDto: CreateErrCodeDto): Promise<any> {
     try {
       // Insert into err_codes table
       const { data: errCodeData, error: errCodeError } = await supabase
@@ -67,7 +67,7 @@ export class ErrCodeService {
     }
   }
 
-  async findByErrCode(searchQuery: string) {
+  async findByErrCode(searchQuery: string): Promise<any> {
     try {
       // Normalize search query to handle different formats
       // Remove "err" prefix if present and pad with leading zero if needed
@@ -132,11 +132,66 @@ export class ErrCodeService {
       };
     }
   }
-  update(id: number, updateErrCodeDto: UpdateErrCodeDto) {
-    return `This action updates a #${id} errCode`;
+  async update(id: number, updateErrCodeDto: UpdateErrCodeDto): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('err_codes')
+        .update({
+          err_code: updateErrCodeDto.errCode,
+          title_english: updateErrCodeDto.titleEnglish,
+          title_hindi: updateErrCodeDto.titleHindi || null,
+        })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        success: true,
+        message: 'Error code updated successfully',
+        data: data[0],
+      };
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return {
+          success: false,
+          message: 'Error updating error code',
+          error: error.message,
+        };
+      }
+      return {
+        success: false,
+        message: 'Error updating error code',
+      };
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} errCode`;
+  async remove(id: number): Promise<any> {
+    try {
+      const { error } = await supabase.from('err_codes').delete().eq('id', id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        success: true,
+        message: 'Error code deleted successfully',
+      };
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return {
+          success: false,
+          message: 'Error deleting error code',
+          error: error.message,
+        };
+      }
+      return {
+        success: false,
+        message: 'Error deleting error code',
+      };
+    }
   }
 }

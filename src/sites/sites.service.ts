@@ -94,4 +94,41 @@ export class SitesService {
       return { success: false, message: 'Server error' };
     }
   }
+
+  async getAmcExpiringWithinDays(userId: string, days: number = 30) {
+    try {
+      if (!userId) {
+        return { success: false, message: 'User is not authenticated' };
+      }
+
+      // Calculate date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+
+      const expiryDate = new Date(today);
+      expiryDate.setDate(expiryDate.getDate() + days);
+      const expiryDateStr = expiryDate.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('sites')
+        .select('*')
+        .eq('owner_id', userId)
+        .gte('amc_end_date', todayStr)
+        .lte('amc_end_date', expiryDateStr)
+        .order('amc_end_date', { ascending: true });
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      return {
+        success: true,
+        message: `Found ${data?.length || 0} site(s) with AMC expiring within ${days} days`,
+        data,
+      };
+    } catch {
+      return { success: false, message: 'Server error' };
+    }
+  }
 }

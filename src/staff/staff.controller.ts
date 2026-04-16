@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { StaffService } from './staff.service';
 import { AddStaffDto } from './dto/add-staff.dto';
 
@@ -7,12 +8,24 @@ export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post('create')
-  addStaff(@Req() req: any, @Body() body: AddStaffDto) {
-    return this.staffService.addStaffMember(req?.user?.id, body);
+  async addStaff(
+    @Req() req: any,
+    @Body() body: AddStaffDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.staffService.addStaffMember(req?.user?.id, body);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(201).json(result);
   }
 
   @Get('getAll')
-  findAllForOwner(@Req() req: any) {
-    return this.staffService.findAllForOwner(req?.user?.id);
+  async findAllForOwner(@Req() req: any, @Res() res: Response) {
+    const result = await this.staffService.findAllForOwner(req?.user?.id);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
   }
 }

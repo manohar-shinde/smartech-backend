@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { OrganizationService } from './organization.service';
 import { UpsertOrganizationDto } from './dto/upsert-organization.dto';
 
@@ -7,17 +8,43 @@ export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
 
   @Post('create')
-  createProfile(@Req() req: any, @Body() body: UpsertOrganizationDto) {
-    return this.organizationService.createProfileForUser(req?.user?.id, body);
+  async createProfile(
+    @Req() req: any,
+    @Body() body: UpsertOrganizationDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.organizationService.createProfileForUser(
+      req?.user?.id,
+      body,
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(201).json(result);
   }
 
   @Post()
-  upsert(@Req() req: any, @Body() body: UpsertOrganizationDto) {
-    return this.organizationService.upsertForUser(req?.user?.id, body);
+  async upsert(
+    @Req() req: any,
+    @Body() body: UpsertOrganizationDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.organizationService.upsertForUser(
+      req?.user?.id,
+      body,
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
   }
 
   @Get('get')
-  findMyDetails(@Req() req: any) {
-    return this.organizationService.findForUser(req?.user?.id);
+  async findMyDetails(@Req() req: any, @Res() res: Response) {
+    const result = await this.organizationService.findForUser(req?.user?.id);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    return res.status(200).json(result);
   }
 }
