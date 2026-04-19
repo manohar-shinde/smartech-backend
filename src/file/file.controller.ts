@@ -11,13 +11,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { FilesService } from './files.service';
+import { FileService } from './file.service';
 import { UploadFileDto } from './dto/upload-file.dto';
 import type { Response } from 'express';
 
-@Controller('files')
-export class FilesController {
-  constructor(private readonly filesService: FilesService) {}
+@Controller('file')
+export class FileController {
+  constructor(private readonly fileService: FileService) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -27,7 +27,7 @@ export class FilesController {
     @Body() body: UploadFileDto,
     @Res() res: Response,
   ) {
-    const result = await this.filesService.uploadFileForUser(
+    const result = await this.fileService.uploadFileForUser(
       req?.user?.id,
       file,
       body,
@@ -40,7 +40,7 @@ export class FilesController {
 
   @Get()
   async listMyFiles(@Req() req: any, @Res() res: Response) {
-    const result = await this.filesService.listFilesForUser(req?.user?.id);
+    const result = await this.fileService.listFilesForUser(req?.user?.id);
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -55,7 +55,7 @@ export class FilesController {
     @Query('expiresIn') expiresIn?: string,
   ) {
     const expiresInSeconds = expiresIn ? parseInt(expiresIn, 10) : 60 * 10;
-    const result = await this.filesService.getDownloadUrlByPath(
+    const result = await this.fileService.getDownloadUrlByPath(
       req?.user?.id,
       path || '',
       expiresInSeconds,
@@ -72,7 +72,7 @@ export class FilesController {
     @Res() res: Response,
     @Query('path') path?: string,
   ) {
-    const result = await this.filesService.getOpenUrlForUserPath(
+    const result = await this.fileService.getOpenUrlForUserPath(
       req?.user?.id,
       path || '',
     );
@@ -92,6 +92,6 @@ export class FilesController {
 
   @Delete()
   deleteFile(@Req() req: any, @Query('path') path?: string) {
-    return this.filesService.deleteFileByPath(req?.user?.id, path || '');
+    return this.fileService.deleteFileByPath(req?.user?.id, path || '');
   }
 }

@@ -3,7 +3,7 @@ import { supabase } from '../supabase/supabase.client';
 import { CreateSiteDto } from './dto/create-site.dto';
 
 @Injectable()
-export class SitesService {
+export class SiteService {
   async createSiteForUser(userId: string, payload: CreateSiteDto) {
     try {
       if (!userId) {
@@ -125,6 +125,41 @@ export class SitesService {
       return {
         success: true,
         message: `Found ${data?.length || 0} site(s) with AMC expiring within ${days} days`,
+        data,
+      };
+    } catch {
+      return { success: false, message: 'Server error' };
+    }
+  }
+
+  async findSiteById(userId: string, siteId: string) {
+    try {
+      if (!userId) {
+        return { success: false, message: 'User is not authenticated' };
+      }
+
+      if (!siteId) {
+        return { success: false, message: 'Site ID is required' };
+      }
+
+      const { data, error } = await supabase
+        .from('sites')
+        .select('*')
+        .eq('id', siteId)
+        .eq('owner_id', userId)
+        .single();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      if (!data) {
+        return { success: false, message: 'Site not found' };
+      }
+
+      return {
+        success: true,
+        message: 'Site details retrieved successfully',
         data,
       };
     } catch {

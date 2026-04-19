@@ -1,11 +1,20 @@
-import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
-import { SitesService } from './sites.service';
+import { SiteService } from './site.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 
-@Controller('sites')
-export class SitesController {
-  constructor(private readonly sitesService: SitesService) {}
+@Controller('site')
+export class SiteController {
+  constructor(private readonly siteService: SiteService) {}
 
   @Post('create')
   async createSite(
@@ -13,7 +22,7 @@ export class SitesController {
     @Body() body: CreateSiteDto,
     @Res() res: Response,
   ) {
-    const result = await this.sitesService.createSiteForUser(
+    const result = await this.siteService.createSiteForUser(
       req?.user?.id,
       body,
     );
@@ -25,7 +34,7 @@ export class SitesController {
 
   @Get('getAll')
   async findAllForUser(@Req() req: any, @Res() res: Response) {
-    const result = await this.sitesService.findAllForUser(req?.user?.id);
+    const result = await this.siteService.findAllForUser(req?.user?.id);
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -39,10 +48,23 @@ export class SitesController {
     @Query('days') days?: string,
   ) {
     const daysParam = days ? parseInt(days, 10) : 30;
-    const result = await this.sitesService.getAmcExpiringWithinDays(
+    const result = await this.siteService.getAmcExpiringWithinDays(
       req?.user?.id,
       daysParam,
     );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  @Get('getSiteById/:id')
+  async findSiteById(
+    @Param('id') siteId: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const result = await this.siteService.findSiteById(req?.user?.id, siteId);
     if (!result.success) {
       return res.status(400).json(result);
     }

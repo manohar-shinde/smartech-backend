@@ -3,7 +3,7 @@ import { supabase } from '../supabase/supabase.client';
 import { UploadFileDto } from './dto/upload-file.dto';
 
 @Injectable()
-export class FilesService {
+export class FileService {
   private readonly privateBucket = 'private-files';
   private readonly signedUrlTtlSeconds = 60;
 

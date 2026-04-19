@@ -1,11 +1,11 @@
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { PartsService } from './parts.service';
+import { PartService } from './part.service';
 import { CreatePartDto } from './dto/create-part.dto';
 
-@Controller('parts')
-export class PartsController {
-  constructor(private readonly partsService: PartsService) {}
+@Controller('part')
+export class PartController {
+  constructor(private readonly partService: PartService) {}
 
   @Post('create')
   async createPart(
@@ -13,7 +13,7 @@ export class PartsController {
     @Body() body: CreatePartDto,
     @Res() res: Response,
   ) {
-    const result = await this.partsService.createPartForOwner(
+    const result = await this.partService.createPartForOwner(
       req?.user?.id,
       body,
     );
@@ -25,7 +25,7 @@ export class PartsController {
 
   @Get('getAll')
   async findAllForOwner(@Req() req: any, @Res() res: Response) {
-    const result = await this.partsService.findAllForOwner(req?.user?.id);
+    const result = await this.partService.findAllForOwner(req?.user?.id);
     if (!result.success) {
       return res.status(400).json(result);
     }

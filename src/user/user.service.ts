@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { createClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase/supabase.client';
+import { authClient, supabase } from '../supabase/supabase.client';
 import { CreateUserDto } from './create-user.dto';
 
 @Injectable()
-export class UsersService {
+export class UserService {
   constructor() {}
   // Create a new user in the Supabase 'users' table
   async createUser(createUserDto: CreateUserDto): Promise<any> {
@@ -142,18 +142,6 @@ export class UsersService {
         };
       }
 
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseAnonKey =
-        process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        return {
-          success: false,
-          message: 'Supabase environment variables are not configured',
-        };
-      }
-
-      const authClient = createClient(supabaseUrl, supabaseAnonKey);
       const { data, error } = await authClient.auth.refreshSession({
         refresh_token: refreshToken,
       });
@@ -196,19 +184,6 @@ export class UsersService {
           message: 'Session token and refresh token are required',
         };
       }
-
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseAnonKey =
-        process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        return {
-          success: false,
-          message: 'Supabase environment variables are not configured',
-        };
-      }
-
-      const authClient = createClient(supabaseUrl, supabaseAnonKey);
 
       const { error: setSessionError } = await authClient.auth.setSession({
         access_token: sessionToken,

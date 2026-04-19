@@ -3,7 +3,7 @@ import { supabase } from '../supabase/supabase.client';
 import { CreatePartDto } from './dto/create-part.dto';
 
 @Injectable()
-export class PartsService {
+export class PartService {
   async createPartForOwner(ownerUserId: string, payload: CreatePartDto) {
     try {
       const ownerContext = await this.getOwnerContext(ownerUserId);

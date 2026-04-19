@@ -1,16 +1,16 @@
 import { Body, Controller, Headers, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { UsersService } from './users.service';
+import { UserService } from './user.service';
 import { Public } from 'src/auth/public.decorator';
 
-@Controller('users')
-export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
 
   @Public()
   @Post('register')
   async create(@Body() body: any, @Res() res: Response) {
-    const result = await this.usersService.createUser(body);
+    const result = await this.userService.createUser(body);
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -21,7 +21,7 @@ export class UsersController {
   @Post('login')
   async login(@Body() body: any, @Res() res: Response) {
     const { email, password } = body;
-    const result = await this.usersService.loginUser(email, password);
+    const result = await this.userService.loginUser(email, password);
     if (!result.success) {
       return res.status(401).json(result);
     }
@@ -31,7 +31,7 @@ export class UsersController {
   @Public()
   @Post('refresh')
   async refresh(@Body() body: { refreshToken: string }, @Res() res: Response) {
-    const result = await this.usersService.refreshUserSession(
+    const result = await this.userService.refreshUserSession(
       body?.refreshToken,
     );
     if (!result.success) {
@@ -49,7 +49,7 @@ export class UsersController {
     const sessionToken = authorization?.startsWith('Bearer ')
       ? authorization.slice(7)
       : '';
-    const result = await this.usersService.logoutUser(
+    const result = await this.userService.logoutUser(
       sessionToken,
       body?.refreshToken,
     );
