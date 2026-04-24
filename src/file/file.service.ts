@@ -36,7 +36,7 @@ export class FileService {
       }
 
       if (!file) {
-        return { success: false, message: 'file is required' };
+        return { success: false, message: 'File is required' };
       }
 
       if (!this.allowedMimeTypes.has(file.mimetype)) {
@@ -47,7 +47,6 @@ export class FileService {
         return { success: false, message: 'File size exceeds 25MB limit' };
       }
 
-      const bucket = this.privateBucket;
       const fileName = this.sanitizeFileName(
         payload?.file_name || file.originalname,
       );
@@ -59,13 +58,13 @@ export class FileService {
         };
       }
 
-      const objectPath = `${userId}/${fileName}`;
+      const objectPath = `${userId}/${Date.now()}-${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from(bucket)
+        .from(this.privateBucket)
         .upload(objectPath, file.buffer, {
           contentType: file.mimetype,
-          upsert: true,
+          upsert: false, // safer (avoid overwriting)
         });
 
       if (uploadError) {
@@ -78,36 +77,22 @@ export class FileService {
         };
       }
 
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(objectPath, 60 * 60);
-
-      if (signedError) {
-        return {
-          success: false,
-          message: this.formatSupabaseError(
-            'Signed URL generation failed',
-            signedError,
-          ),
-        };
-      }
-
       return {
         success: true,
         message: 'File uploaded successfully',
         data: {
-          bucket,
           object_path: objectPath,
-          app_file_url: this.buildAppFileUrl(objectPath),
           file_name: fileName,
           original_name: file.originalname,
           mime_type: file.mimetype,
           size_bytes: file.size,
-          signed_url: signedData.signedUrl,
         },
       };
-    } catch {
-      return { success: false, message: 'Server error' };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Server error',
+      };
     }
   }
 

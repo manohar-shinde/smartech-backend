@@ -4,6 +4,7 @@ import { UpsertOrganizationDto } from './dto/upsert-organization.dto';
 
 @Injectable()
 export class OrganizationService {
+  private readonly privateBucket = 'private-files';
   async createProfileForUser(userId: string, payload: UpsertOrganizationDto) {
     try {
       if (!userId) {
@@ -202,7 +203,14 @@ export class OrganizationService {
           message: error.message,
         };
       }
-
+      if (data && data?.logo) {
+        const { data: file, error: fileError } = await supabase.storage
+          .from(this.privateBucket)
+          .createSignedUrls([data?.logo], 60 * 60);
+        if (file) {
+          data.logo = file?.[0].signedUrl;
+        }
+      }
       return {
         success: true,
         message: data
