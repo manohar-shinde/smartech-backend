@@ -31,7 +31,13 @@ export class UserService {
         };
       }
 
-      const userId = authUser.user.id;
+      const userId = authUser.user?.id;
+      if (!userId) {
+        return {
+          success: false,
+          message: 'Unable to create auth user',
+        };
+      }
 
       // 2️⃣ Insert profile in public.users
       const { data, error } = await supabase
@@ -49,6 +55,7 @@ export class UserService {
         .select();
 
       if (error) {
+        await supabase.auth.admin.deleteUser(userId);
         return {
           success: false,
           message: error.message,

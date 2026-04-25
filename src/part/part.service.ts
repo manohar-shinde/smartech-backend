@@ -1,15 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import { supabase } from '../supabase/supabase.client';
+import { getUserSupabaseClient, supabase } from '../supabase/supabase.client';
 import { CreatePartDto } from './dto/create-part.dto';
 
 @Injectable()
 export class PartService {
-  async createPartForOwner(ownerUserId: string, payload: CreatePartDto) {
+  async createPartForOwner(ownerUserId: string, token: string, payload: CreatePartDto) {
     try {
-      const ownerContext = await this.getOwnerContext(ownerUserId);
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
+        };
+      }
 
-      if (!ownerContext.success) {
-        return ownerContext;
+      const orgContext = await this.getOrganizationContextForParts(ownerUserId);
+
+      if (!orgContext.success) {
+        return orgContext;
       }
 
       if (!payload?.part_name) {
@@ -37,11 +44,12 @@ export class PartService {
         };
       }
 
-      const { data, error } = await supabase
+      const userSupabase = getUserSupabaseClient(token);
+      const { data, error } = await userSupabase
         .from('parts')
         .insert([
           {
-            organization_id: ownerContext.organizationId,
+            organization_id: orgContext.organizationId,
             part_name: payload.part_name,
             sku: payload.sku,
             description: payload.description,
@@ -77,16 +85,16 @@ export class PartService {
 
   async findAllForOwner(ownerUserId: string) {
     try {
-      const ownerContext = await this.getOwnerContext(ownerUserId);
+      const orgContext = await this.getOrganizationContextForParts(ownerUserId);
 
-      if (!ownerContext.success) {
-        return ownerContext;
+      if (!orgContext.success) {
+        return orgContext;
       }
 
       const { data, error } = await supabase
         .from('parts')
         .select('*')
-        .eq('organization_id', ownerContext.organizationId)
+        .eq('organization_id', orgContext.organizationId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -109,54 +117,60 @@ export class PartService {
     }
   }
 
-  private async getOwnerContext(ownerUserId: string): Promise<any> {
-    if (!ownerUserId) {
+  /**
+   * Resolves org for parts APIs: owners via organizations.owner_id, or any user
+   * listed in organization_members (matches parts_write_access RLS).
+   */
+  private async getOrganizationContextForParts(userId: string): Promise<any> {
+    if (!userId) {
       return {
         success: false,
         message: 'User is not authenticated',
       };
     }
 
-    const { data: ownerUser, error: ownerUserError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', ownerUserId)
-      .single();
-
-    if (ownerUserError) {
-      return {
-        success: false,
-        message: ownerUserError.message,
-      };
-    }
-
-    if (ownerUser?.role !== 'OWNER') {
-      return {
-        success: false,
-        message: 'Only owner can manage parts',
-      };
-    }
-
-    const { data: organizations, error: organizationError } = await supabase
+    const { data: ownedOrgs, error: ownedError } = await supabase
       .from('organizations')
       .select('id')
-      .eq('owner_id', ownerUserId)
+      .eq('owner_id', userId)
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (organizationError) {
+    if (ownedError) {
       return {
         success: false,
-        message: organizationError.message,
+        message: ownedError.message,
       };
     }
 
-    const organizationId = organizations?.[0]?.id as string | undefined;
+    const ownedId = ownedOrgs?.[0]?.id as string | undefined;
+    if (ownedId) {
+      return {
+        success: true,
+        organizationId: ownedId,
+      };
+    }
 
+    const { data: membership, error: memberError } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (memberError) {
+      return {
+        success: false,
+        message: memberError.message,
+      };
+    }
+
+    const organizationId = membership?.organization_id as string | undefined;
     if (!organizationId) {
       return {
         success: false,
-        message: 'Organization not found for the logged-in owner',
+        message: 'Organization not found for this user',
       };
     }
 

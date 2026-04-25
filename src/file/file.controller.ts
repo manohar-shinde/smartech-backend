@@ -14,6 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { FileService } from './file.service';
 import { UploadFileDto } from './dto/upload-file.dto';
 import type { Response } from 'express';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('file')
 export class FileController {
@@ -33,7 +34,7 @@ export class FileController {
       body,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -42,7 +43,7 @@ export class FileController {
   async listMyFiles(@Req() req: any, @Res() res: Response) {
     const result = await this.fileService.listFilesForUser(req?.user?.id);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -61,7 +62,7 @@ export class FileController {
       expiresInSeconds,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -78,7 +79,7 @@ export class FileController {
     );
 
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
 
     if (!result.data?.redirect_url) {
@@ -91,7 +92,15 @@ export class FileController {
   }
 
   @Delete()
-  deleteFile(@Req() req: any, @Query('path') path?: string) {
-    return this.fileService.deleteFileByPath(req?.user?.id, path || '');
+  async deleteFile(
+    @Req() req: any,
+    @Query('path') path: string | undefined,
+    @Res() res: Response,
+  ) {
+    const result = await this.fileService.deleteFileByPath(req?.user?.id, path || '');
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
   }
 }

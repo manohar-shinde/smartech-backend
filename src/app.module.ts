@@ -11,6 +11,7 @@ import { StaffModule } from './staff/staff.module';
 import { PartModule } from './part/part.module';
 import { FileModule } from './file/file.module';
 import { BreakdownModule } from './breakdown/breakdown.module';
+import { AmcContractModule } from './amc-contract/amc-contract.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BreakdownModule } from './breakdown/breakdown.module';
     PartModule,
     FileModule,
     BreakdownModule,
+    AmcContractModule,
   ],
   controllers: [AppController],
   providers: [

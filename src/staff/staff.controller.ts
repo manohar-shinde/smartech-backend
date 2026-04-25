@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { StaffService } from './staff.service';
 import { AddStaffDto } from './dto/add-staff.dto';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('staff')
 export class StaffController {
@@ -13,9 +14,13 @@ export class StaffController {
     @Body() body: AddStaffDto,
     @Res() res: Response,
   ) {
-    const result = await this.staffService.addStaffMember(req?.user?.id, body);
+    const result = await this.staffService.addStaffMember(
+      req?.user?.id,
+      req?.token,
+      body,
+    );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -24,7 +29,7 @@ export class StaffController {
   async findAllForOwner(@Req() req: any, @Res() res: Response) {
     const result = await this.staffService.findAllForOwner(req?.user?.id);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }

@@ -11,6 +11,7 @@ import {
 import type { Response } from 'express';
 import { SiteService } from './site.service';
 import { CreateSiteDto } from './dto/create-site.dto';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('site')
 export class SiteController {
@@ -27,7 +28,7 @@ export class SiteController {
       body,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -36,7 +37,7 @@ export class SiteController {
   async findAllForUser(@Req() req: any, @Res() res: Response) {
     const result = await this.siteService.findAllForUser(req?.user?.id);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -48,12 +49,19 @@ export class SiteController {
     @Query('days') days?: string,
   ) {
     const daysParam = days ? parseInt(days, 10) : 30;
+    if (Number.isNaN(daysParam) || daysParam < 0) {
+      const errorResult = {
+        success: false,
+        message: 'days must be a non-negative number',
+      };
+      return res.status(getErrorStatusCode(errorResult)).json(errorResult);
+    }
     const result = await this.siteService.getAmcExpiringWithinDays(
       req?.user?.id,
       daysParam,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -66,7 +74,7 @@ export class SiteController {
   ) {
     const result = await this.siteService.findSiteById(req?.user?.id, siteId);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }

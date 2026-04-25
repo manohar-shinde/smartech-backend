@@ -1,9 +1,48 @@
+import {
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+
+const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
+const STATUSES = [
+  'open',
+  'assigned',
+  'in_progress',
+  'resolved',
+  'closed',
+] as const;
+
 export class CreateBreakdownDto {
-  site_id?: string;
-  assigned_to?: string;
-  title?: string;
+  @IsNotEmpty()
+  @IsUUID()
+  site_id!: string;
+
+  @IsOptional()
+  @IsUUID()
+  assigned_to?: string | null;
+
+  @IsNotEmpty()
+  @IsString()
+  title!: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  priority?: 'low' | 'medium' | 'high' | 'critical';
-  status?: 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
+
+  @IsOptional()
+  @IsIn([...PRIORITIES])
+  priority?: (typeof PRIORITIES)[number];
+
+  @IsOptional()
+  @IsIn([...STATUSES])
+  status?: (typeof STATUSES)[number];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   images?: string[];
 }

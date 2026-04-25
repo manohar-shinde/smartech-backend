@@ -69,6 +69,13 @@ export class ErrCodeService {
 
   async findByErrCode(searchQuery: string): Promise<any> {
     try {
+      if (!searchQuery?.trim()) {
+        return {
+          success: false,
+          message: 'searchQuery is required',
+        };
+      }
+
       // Normalize search query to handle different formats
       // Remove "err" prefix if present and pad with leading zero if needed
       let normalizedQuery = searchQuery.trim().toLowerCase();

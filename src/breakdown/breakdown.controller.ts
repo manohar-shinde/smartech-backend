@@ -13,6 +13,7 @@ import {
 import type { Response } from 'express';
 import { BreakdownService } from './breakdown.service';
 import { CreateBreakdownDto, UpdateBreakdownDto } from './dto';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('breakdown')
 export class BreakdownController {
@@ -26,10 +27,11 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.createBreakdown(
       req?.user?.id,
+      req?.token,
       createBreakdownDto,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -42,10 +44,11 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.findAllForSite(
       req?.user?.id,
+      req?.token,
       siteId,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -58,10 +61,11 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.findBreakdownById(
       req?.user?.id,
+      req?.token,
       id,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -75,11 +79,12 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.updateBreakdown(
       req?.user?.id,
+      req?.token,
       id,
       updateBreakdownDto,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -88,10 +93,11 @@ export class BreakdownController {
   async remove(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
     const result = await this.breakdownService.deleteBreakdown(
       req?.user?.id,
+      req?.token,
       id,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -105,11 +111,12 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.findByStatus(
       req?.user?.id,
+      req?.token,
       status,
       siteId,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -123,11 +130,12 @@ export class BreakdownController {
   ) {
     const result = await this.breakdownService.findByPriority(
       req?.user?.id,
+      req?.token,
       priority,
       siteId,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }

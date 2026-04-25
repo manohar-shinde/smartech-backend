@@ -1,16 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import { supabase } from '../supabase/supabase.client';
+import { getUserSupabaseClient, supabase } from '../supabase/supabase.client';
 import { UpsertOrganizationDto } from './dto/upsert-organization.dto';
 
 @Injectable()
 export class OrganizationService {
   private readonly privateBucket = 'private-files';
-  async createProfileForUser(userId: string, payload: UpsertOrganizationDto) {
+  async createOrganizationForUser(userId: string, token: string, payload: UpsertOrganizationDto) {
     try {
       if (!userId) {
         return {
           success: false,
           message: 'User is not authenticated',
+        };
+      }
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
         };
       }
 
@@ -21,7 +27,8 @@ export class OrganizationService {
         };
       }
 
-      const { data: existingRows, error: existingError } = await supabase
+      const userSupabase = getUserSupabaseClient(token);
+      const { data: existingRows, error: existingError } = await userSupabase
         .from('organizations')
         .select('id')
         .eq('owner_id', userId)
@@ -54,7 +61,7 @@ export class OrganizationService {
         site: payload?.site,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await userSupabase
         .from('organizations')
         .insert([
           {
@@ -72,6 +79,22 @@ export class OrganizationService {
         };
       }
 
+      const { error: memberError } = await userSupabase.from('organization_members').insert([
+        {
+          user_id: userId,
+          organization_id: data.id,
+          role: 'OWNER',
+        },
+      ]);
+
+      if (memberError) {
+        await userSupabase.from('organizations').delete().eq('id', data.id);
+        return {
+          success: false,
+          message: memberError.message,
+        };
+      }
+
       return {
         success: true,
         message: 'Company profile created successfully',
@@ -85,7 +108,7 @@ export class OrganizationService {
     }
   }
 
-  async upsertForUser(userId: string, payload: UpsertOrganizationDto) {
+  async upsertOrganizationForUser(userId: string, payload: UpsertOrganizationDto) {
     try {
       if (!userId) {
         return {
@@ -169,6 +192,22 @@ export class OrganizationService {
         };
       }
 
+      const { error: memberError } = await supabase.from('organization_members').insert([
+        {
+          user_id: userId,
+          organization_id: data.id,
+          role: 'OWNER',
+        },
+      ]);
+
+      if (memberError) {
+        await supabase.from('organizations').delete().eq('id', data.id);
+        return {
+          success: false,
+          message: memberError.message,
+        };
+      }
+
       return {
         success: true,
         message: 'Company details saved successfully',
@@ -182,7 +221,7 @@ export class OrganizationService {
     }
   }
 
-  async findForUser(userId: string) {
+  async findOrganizationForUser(userId: string, token: string) {
     try {
       if (!userId) {
         return {
@@ -190,8 +229,15 @@ export class OrganizationService {
           message: 'User is not authenticated',
         };
       }
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
+        };
+      }
 
-      const { data, error } = await supabase
+      const userSupabase = getUserSupabaseClient(token);
+      const { data, error } = await userSupabase
         .from('organizations')
         .select('*')
         .eq('owner_id', userId)
@@ -204,7 +250,7 @@ export class OrganizationService {
         };
       }
       if (data && data?.logo) {
-        const { data: file, error: fileError } = await supabase.storage
+        const { data: file, error: fileError } = await userSupabase.storage
           .from(this.privateBucket)
           .createSignedUrls([data?.logo], 60 * 60);
         if (file) {

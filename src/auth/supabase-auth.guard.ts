@@ -37,6 +37,7 @@ export class SupabaseAuthGuard implements CanActivate {
     }
 
     request.user = data.user;
+    request.token = token;
     return true;
   }
 }

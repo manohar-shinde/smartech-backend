@@ -1,14 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import { supabase } from '../supabase/supabase.client';
+import { getUserSupabaseClient, supabase } from '../supabase/supabase.client';
 import { AddStaffDto, STAFF_ROLES } from './dto/add-staff.dto';
 
 @Injectable()
 export class StaffService {
   async addStaffMember(
     ownerUserId: string,
+    token: string,
     payload: AddStaffDto,
   ): Promise<any> {
     try {
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
+        };
+      }
+
       const ownerContext = await this.getOwnerContext(ownerUserId);
 
       if (!ownerContext.success) {
@@ -53,7 +61,7 @@ export class StaffService {
 
       const staffUserId = authUser.user.id;
 
-      const { data, error } = await supabase
+      const { data: createdUser, error: userError } = await supabase
         .from('users')
         .insert([
           {
@@ -63,25 +71,51 @@ export class StaffService {
             phone: payload.phone,
             address: payload.address,
             role: payload.role,
-            organization_id: ownerContext.organizationId,
           },
         ])
         .select()
         .single();
 
-      if (error) {
+      if (userError) {
         await supabase.auth.admin.deleteUser(staffUserId);
 
         return {
           success: false,
-          message: error.message,
+          message: userError.message,
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      const { data: organizationMember, error: memberError } = await userSupabase
+        .from('organization_members')
+        .insert([
+          {
+            user_id: staffUserId,
+            organization_id: ownerContext.organizationId,
+            role: payload.role,
+          },
+        ])
+        .select()
+        .single();
+
+      if (memberError) {
+        await supabase.from('users').delete().eq('id', staffUserId);
+        await supabase.auth.admin.deleteUser(staffUserId);
+        return {
+          success: false,
+          message: memberError.message,
         };
       }
 
       return {
         success: true,
         message: 'Staff member created successfully',
-        data,
+        data: {
+          ...createdUser,
+          organization_member_id: organizationMember.id,
+          organization_id: organizationMember.organization_id,
+          member_role: organizationMember.role,
+        },
       };
     } catch {
       return {
@@ -99,11 +133,12 @@ export class StaffService {
         return ownerContext;
       }
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, name, email, phone, address, role, organization_id')
+      const { data: members, error } = await supabase
+        .from('organization_members')
+        .select('id, user_id, organization_id, role, created_at')
         .eq('organization_id', ownerContext.organizationId)
-        .in('role', [...STAFF_ROLES]);
+        .in('role', [...STAFF_ROLES])
+        .order('created_at', { ascending: false });
 
       if (error) {
         return {
@@ -112,10 +147,43 @@ export class StaffService {
         };
       }
 
+      const userIds = (members || []).map((member: any) => member.user_id);
+      const { data: users, error: usersError } = userIds.length
+        ? await supabase
+            .from('users')
+            .select('id, name, email, phone, address, active')
+            .in('id', userIds)
+        : { data: [], error: null as any };
+
+      if (usersError) {
+        return {
+          success: false,
+          message: usersError.message,
+        };
+      }
+
+      const usersById = new Map(
+        (users || []).map((user: any) => [user.id, user]),
+      );
+
       return {
         success: true,
         message: 'Staff members fetched successfully',
-        data,
+        data: (members || []).map((member: any) => {
+          const user = usersById.get(member.user_id);
+          return {
+          id: member.user_id,
+          name: user?.name ?? null,
+          email: user?.email ?? null,
+          phone: user?.phone ?? null,
+          address: user?.address ?? null,
+          active: user?.active ?? true,
+          role: member.role,
+          organization_id: member.organization_id,
+          organization_member_id: member.id,
+          joined_at: member.created_at,
+          };
+        }),
       };
     } catch {
       return {

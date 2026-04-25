@@ -4,6 +4,30 @@ import { CreateSiteDto } from './dto/create-site.dto';
 
 @Injectable()
 export class SiteService {
+  private async getOrganizationIdForOwner(userId: string) {
+    const { data: existingOrganizations, error: existingOrgError } =
+      await supabase
+        .from('organizations')
+        .select('id')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (existingOrgError) {
+      return { success: false, message: existingOrgError.message };
+    }
+
+    const organizationId = existingOrganizations?.[0]?.id as string | undefined;
+    if (!organizationId) {
+      return {
+        success: false,
+        message: 'Organization not found for this user',
+      };
+    }
+
+    return { success: true, organizationId };
+  }
+
   async createSiteForUser(userId: string, payload: CreateSiteDto) {
     try {
       if (!userId) {
@@ -14,41 +38,18 @@ export class SiteService {
         return { success: false, message: 'site_name is required' };
       }
 
-      const { data: existingOrganizations, error: existingOrgError } =
-        await supabase
-          .from('organizations')
-          .select('id')
-          .eq('owner_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-      if (existingOrgError) {
-        return { success: false, message: existingOrgError.message };
-      }
-
-      const organizationId = existingOrganizations?.[0]?.id as
-        | string
-        | undefined;
-
-      if (!organizationId) {
-        return {
-          success: false,
-          message: 'Organization not found for this user',
-        };
+      const orgContext = await this.getOrganizationIdForOwner(userId);
+      if (!orgContext.success) {
+        return orgContext;
       }
 
       const sitePayload = {
-        owner_id: userId,
-        organization_id: organizationId,
+        organization_id: orgContext.organizationId,
         site_name: payload.site_name,
         address: payload.address,
         contact_person: payload.contact_person,
         email: payload.email,
         phone: payload.phone,
-        amc_start_date: payload.amc_start_date,
-        amc_end_date: payload.amc_end_date,
-        amount_received: payload.amount_received,
-        transactions_details: payload.transactions_details,
       };
 
       const { data, error } = await supabase
@@ -77,10 +78,15 @@ export class SiteService {
         return { success: false, message: 'User is not authenticated' };
       }
 
+      const orgContext = await this.getOrganizationIdForOwner(userId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
       const { data, error } = await supabase
         .from('sites')
         .select('*')
-        .eq('owner_id', userId);
+        .eq('organization_id', orgContext.organizationId);
 
       if (error) {
         return { success: false, message: error.message };
@@ -101,7 +107,11 @@ export class SiteService {
         return { success: false, message: 'User is not authenticated' };
       }
 
-      // Calculate date range
+      const orgContext = await this.getOrganizationIdForOwner(userId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayStr = today.toISOString().split('T')[0];
@@ -111,12 +121,12 @@ export class SiteService {
       const expiryDateStr = expiryDate.toISOString().split('T')[0];
 
       const { data, error } = await supabase
-        .from('sites')
-        .select('*')
-        .eq('owner_id', userId)
-        .gte('amc_end_date', todayStr)
-        .lte('amc_end_date', expiryDateStr)
-        .order('amc_end_date', { ascending: true });
+        .from('amc_contracts')
+        .select('*, sites (id, site_name, address, contact_person, email, phone)')
+        .eq('organization_id', orgContext.organizationId)
+        .gte('end_date', todayStr)
+        .lte('end_date', expiryDateStr)
+        .order('end_date', { ascending: true });
 
       if (error) {
         return { success: false, message: error.message };
@@ -124,7 +134,7 @@ export class SiteService {
 
       return {
         success: true,
-        message: `Found ${data?.length || 0} site(s) with AMC expiring within ${days} days`,
+        message: `Found ${data?.length || 0} contract(s) expiring within ${days} day(s)`,
         data,
       };
     } catch {
@@ -142,11 +152,16 @@ export class SiteService {
         return { success: false, message: 'Site ID is required' };
       }
 
+      const orgContext = await this.getOrganizationIdForOwner(userId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
       const { data, error } = await supabase
         .from('sites')
         .select('*')
         .eq('id', siteId)
-        .eq('owner_id', userId)
+        .eq('organization_id', orgContext.organizationId)
         .single();
 
       if (error) {

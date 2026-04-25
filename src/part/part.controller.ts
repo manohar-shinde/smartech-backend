@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PartService } from './part.service';
 import { CreatePartDto } from './dto/create-part.dto';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('part')
 export class PartController {
@@ -15,10 +16,11 @@ export class PartController {
   ) {
     const result = await this.partService.createPartForOwner(
       req?.user?.id,
+      req?.token,
       body,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -27,7 +29,7 @@ export class PartController {
   async findAllForOwner(@Req() req: any, @Res() res: Response) {
     const result = await this.partService.findAllForOwner(req?.user?.id);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }

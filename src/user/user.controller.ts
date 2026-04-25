@@ -2,6 +2,7 @@ import { Body, Controller, Headers, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { UserService } from './user.service';
 import { Public } from 'src/auth/public.decorator';
+import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('user')
 export class UserController {
@@ -12,7 +13,7 @@ export class UserController {
   async create(@Body() body: any, @Res() res: Response) {
     const result = await this.userService.createUser(body);
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
   }
@@ -23,7 +24,7 @@ export class UserController {
     const { email, password } = body;
     const result = await this.userService.loginUser(email, password);
     if (!result.success) {
-      return res.status(401).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -35,7 +36,7 @@ export class UserController {
       body?.refreshToken,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }
@@ -54,7 +55,7 @@ export class UserController {
       body?.refreshToken,
     );
     if (!result.success) {
-      return res.status(400).json(result);
+      return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(200).json(result);
   }

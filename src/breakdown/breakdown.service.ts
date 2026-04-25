@@ -1,29 +1,50 @@
 import { Injectable } from '@nestjs/common';
-import { supabase } from '../supabase/supabase.client';
+import { getUserSupabaseClient, supabase } from '../supabase/supabase.client';
 import { CreateBreakdownDto, UpdateBreakdownDto } from './dto';
 
 @Injectable()
 export class BreakdownService {
-  private async getOrganizationIdForUser(
+  /**
+   * RLS on breakdowns requires organization_members. Owners are resolved via
+   * organizations; everyone else via organization_members (same org as parts).
+   */
+  private async getOrganizationContextForBreakdowns(
     userId: string,
   ): Promise<{ success: boolean; organizationId?: string; message?: string }> {
     try {
-      const { data: existingOrganizations, error: existingOrgError } =
-        await supabase
-          .from('organizations')
-          .select('id')
-          .eq('owner_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-      if (existingOrgError) {
-        return { success: false, message: existingOrgError.message };
+      if (!userId) {
+        return { success: false, message: 'User is not authenticated' };
       }
 
-      const organizationId = existingOrganizations?.[0]?.id as
-        | string
-        | undefined;
+      const { data: ownedOrgs, error: ownedError } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
+      if (ownedError) {
+        return { success: false, message: ownedError.message };
+      }
+
+      const ownedId = ownedOrgs?.[0]?.id as string | undefined;
+      if (ownedId) {
+        return { success: true, organizationId: ownedId };
+      }
+
+      const { data: membership, error: memberError } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (memberError) {
+        return { success: false, message: memberError.message };
+      }
+
+      const organizationId = membership?.organization_id as string | undefined;
       if (!organizationId) {
         return {
           success: false,
@@ -37,8 +58,11 @@ export class BreakdownService {
     }
   }
 
-  async createBreakdown(userId: string, payload: CreateBreakdownDto) {
+  async createBreakdown(userId: string, token: string, payload: CreateBreakdownDto) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -51,7 +75,7 @@ export class BreakdownService {
         return { success: false, message: 'title is required' };
       }
 
-      const orgContext = await this.getOrganizationIdForUser(userId);
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
       if (!orgContext.success || !orgContext.organizationId) {
         return {
           success: false,
@@ -59,8 +83,9 @@ export class BreakdownService {
         };
       }
 
-      // Validate that the site belongs to the user's organization
-      const { data: siteData, error: siteError } = await supabase
+      const userSupabase = getUserSupabaseClient(token);
+
+      const { data: siteData, error: siteError } = await userSupabase
         .from('sites')
         .select('id, organization_id')
         .eq('id', payload.site_id)
@@ -86,7 +111,7 @@ export class BreakdownService {
         images: payload.images || null,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await userSupabase
         .from('breakdowns')
         .insert([breakdownPayload])
         .select()
@@ -109,8 +134,11 @@ export class BreakdownService {
     }
   }
 
-  async findAllForSite(userId: string, siteId: string) {
+  async findAllForSite(userId: string, token: string, siteId: string) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -119,10 +147,20 @@ export class BreakdownService {
         return { success: false, message: 'Site ID is required' };
       }
 
-      const { data, error } = await supabase
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      const { data, error } = await userSupabase
         .from('breakdowns')
         .select('*')
         .eq('site_id', siteId)
+        .eq('organization_id', orgContext.organizationId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -138,8 +176,11 @@ export class BreakdownService {
     }
   }
 
-  async findBreakdownById(userId: string, breakdownId: string) {
+  async findBreakdownById(userId: string, token: string, breakdownId: string) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -148,10 +189,20 @@ export class BreakdownService {
         return { success: false, message: 'Breakdown ID is required' };
       }
 
-      const { data, error } = await supabase
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      const { data, error } = await userSupabase
         .from('breakdowns')
         .select('*')
         .eq('id', breakdownId)
+        .eq('organization_id', orgContext.organizationId)
         .single();
 
       if (error) {
@@ -174,10 +225,14 @@ export class BreakdownService {
 
   async updateBreakdown(
     userId: string,
+    token: string,
     breakdownId: string,
     payload: UpdateBreakdownDto,
   ) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -186,15 +241,25 @@ export class BreakdownService {
         return { success: false, message: 'Breakdown ID is required' };
       }
 
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
       const updatePayload = {
         ...payload,
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
+      const userSupabase = getUserSupabaseClient(token);
+      const { data, error } = await userSupabase
         .from('breakdowns')
         .update(updatePayload)
         .eq('id', breakdownId)
+        .eq('organization_id', orgContext.organizationId)
         .select()
         .single();
 
@@ -212,8 +277,11 @@ export class BreakdownService {
     }
   }
 
-  async deleteBreakdown(userId: string, breakdownId: string) {
+  async deleteBreakdown(userId: string, token: string, breakdownId: string) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -222,10 +290,20 @@ export class BreakdownService {
         return { success: false, message: 'Breakdown ID is required' };
       }
 
-      const { error } = await supabase
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      const { error } = await userSupabase
         .from('breakdowns')
         .delete()
-        .eq('id', breakdownId);
+        .eq('id', breakdownId)
+        .eq('organization_id', orgContext.organizationId);
 
       if (error) {
         return { success: false, message: error.message };
@@ -240,8 +318,11 @@ export class BreakdownService {
     }
   }
 
-  async findByStatus(userId: string, status?: string, siteId?: string) {
+  async findByStatus(userId: string, token: string, status?: string, siteId?: string) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -250,7 +331,20 @@ export class BreakdownService {
         return { success: false, message: 'status is required' };
       }
 
-      let query = supabase.from('breakdowns').select('*').eq('status', status);
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      let query = userSupabase
+        .from('breakdowns')
+        .select('*')
+        .eq('status', status)
+        .eq('organization_id', orgContext.organizationId);
 
       if (siteId) {
         query = query.eq('site_id', siteId);
@@ -273,8 +367,11 @@ export class BreakdownService {
     }
   }
 
-  async findByPriority(userId: string, priority?: string, siteId?: string) {
+  async findByPriority(userId: string, token: string, priority?: string, siteId?: string) {
     try {
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
+      }
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
       }
@@ -283,10 +380,20 @@ export class BreakdownService {
         return { success: false, message: 'priority is required' };
       }
 
-      let query = supabase
+      const orgContext = await this.getOrganizationContextForBreakdowns(userId);
+      if (!orgContext.success || !orgContext.organizationId) {
+        return {
+          success: false,
+          message: orgContext.message || 'Organization not found for this user',
+        };
+      }
+
+      const userSupabase = getUserSupabaseClient(token);
+      let query = userSupabase
         .from('breakdowns')
         .select('*')
-        .eq('priority', priority);
+        .eq('priority', priority)
+        .eq('organization_id', orgContext.organizationId);
 
       if (siteId) {
         query = query.eq('site_id', siteId);
