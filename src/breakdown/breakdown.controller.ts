@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { BreakdownService } from './breakdown.service';
-import { CreateBreakdownDto, UpdateBreakdownDto } from './dto';
+import { AddBreakdownServiceDto, CreateBreakdownDto, UpdateBreakdownDto } from './dto';
 import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('breakdown')
@@ -36,6 +36,23 @@ export class BreakdownController {
     return res.status(201).json(result);
   }
 
+  @Post('addService')
+  async addService(
+    @Req() req: any,
+    @Body() body: AddBreakdownServiceDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.breakdownService.addBreakdownService(
+      req?.user?.id,
+      req?.token,
+      body,
+    );
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(201).json(result);
+  }
+
   @Get('getBreakdownsForSite/:siteId')
   async findBySite(
     @Param('siteId') siteId: string,
@@ -46,6 +63,23 @@ export class BreakdownController {
       req?.user?.id,
       req?.token,
       siteId,
+    );
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  @Get(':id/services')
+  async findBreakdownServices(
+    @Param('id') breakdownId: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const result = await this.breakdownService.findServicesForBreakdown(
+      req?.user?.id,
+      req?.token,
+      breakdownId,
     );
     if (!result.success) {
       return res.status(getErrorStatusCode(result)).json(result);

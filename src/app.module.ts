@@ -12,6 +12,8 @@ import { PartModule } from './part/part.module';
 import { FileModule } from './file/file.module';
 import { BreakdownModule } from './breakdown/breakdown.module';
 import { AmcContractModule } from './amc-contract/amc-contract.module';
+import { ServiceModule } from './service/service.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { AmcContractModule } from './amc-contract/amc-contract.module';
     FileModule,
     BreakdownModule,
     AmcContractModule,
+    ServiceModule,
+    InvoiceModule,
   ],
   controllers: [AppController],
   providers: [
