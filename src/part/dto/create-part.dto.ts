@@ -1,5 +1,4 @@
 import {
-  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -39,7 +38,7 @@ export class CreatePartDto {
   serial_number?: string;
 
   @IsOptional()
-  @IsInt()
+  @IsNumber()
   @Min(0)
   quantity?: number;
 }

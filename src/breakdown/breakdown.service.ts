@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { getUserSupabaseClient, supabase } from '../supabase/supabase.client';
-import { AddBreakdownServiceDto, CreateBreakdownDto, UpdateBreakdownDto } from './dto';
+import {
+  AddBreakdownServiceDto,
+  AddBreakdownServicePartDto,
+  CreateBreakdownDto,
+  UpdateBreakdownDto,
+} from './dto';
 
 @Injectable()
 export class BreakdownService {
@@ -25,6 +30,83 @@ export class BreakdownService {
       .delete()
       .eq('breakdown_service_id', breakdownServiceId);
     await userSupabase.from('breakdown_services').delete().eq('id', breakdownServiceId);
+  }
+
+  private sumPartQuantities(lines: AddBreakdownServicePartDto[]): Map<string, number> {
+    const demand = new Map<string, number>();
+    for (const line of lines) {
+      demand.set(line.part_id, (demand.get(line.part_id) ?? 0) + line.quantity);
+    }
+    return demand;
+  }
+
+  private async assertStockAvailableForParts(
+    partIds: string[],
+    demandByPartId: Map<string, number>,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (partIds.length === 0) {
+      return { ok: true };
+    }
+
+    const { data: stockRows, error } = await supabase
+      .from('stock')
+      .select('part_id, quantity')
+      .in('part_id', partIds);
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    const haveByPart = new Map<string, number>();
+    for (const row of stockRows ?? []) {
+      const r = row as { part_id: string; quantity: number | string | null };
+      if (!r.part_id) continue;
+      const q = r.quantity;
+      haveByPart.set(r.part_id, q === null || q === undefined ? 0 : Number(q));
+    }
+
+    for (const partId of partIds) {
+      const need = demandByPartId.get(partId) ?? 0;
+      const have = haveByPart.get(partId) ?? 0;
+      if (need > have) {
+        return {
+          ok: false,
+          message: `Insufficient stock for part ${partId}: need ${need}, available ${have}`,
+        };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  /** Service-role Supabase client: same approach as part creation for `stock_movements` / RLS. */
+  private async insertStockMovementsOutForBreakdownService(params: {
+    serviceId: string;
+    serviceName: string;
+    breakdownId: string;
+    breakdownServiceId: string;
+    lines: AddBreakdownServicePartDto[];
+  }): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!params.lines.length) {
+      return { ok: true };
+    }
+
+    const baseNote = `OUT - catalog service "${params.serviceName}" (reference services/${params.serviceId}); breakdown ${params.breakdownId}; breakdown_service_id=${params.breakdownServiceId}`;
+
+    const insertRows = params.lines.map((line) => ({
+      part_id: line.part_id,
+      type: 'OUT',
+      quantity: line.quantity,
+      reference_type: 'services',
+      reference_id: params.serviceId,
+      notes: `${baseNote}; part_id=${line.part_id}; qty=${line.quantity}`,
+    }));
+
+    const { error } = await supabase.from('stock_movements').insert(insertRows);
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: true };
   }
 
   /**
@@ -199,7 +281,7 @@ export class BreakdownService {
 
       const { data: catalogService, error: serviceError } = await userSupabase
         .from('services')
-        .select('id')
+        .select('id, name')
         .eq('id', payload.service_id)
         .eq('organization_id', orgContext.organizationId)
         .maybeSingle();
@@ -213,6 +295,13 @@ export class BreakdownService {
           message: 'Service not found or does not belong to your organization',
         };
       }
+
+      const catalogServiceName =
+        catalogService.name !== undefined &&
+        catalogService.name !== null &&
+        String(catalogService.name).trim() !== ''
+          ? String(catalogService.name).trim()
+          : 'Service';
 
       const partIds = [...new Set((payload.service_parts || []).map((p) => p.part_id))];
       if (partIds.length > 0) {
@@ -230,6 +319,14 @@ export class BreakdownService {
             success: false,
             message: 'One or more parts were not found or do not belong to your organization',
           };
+        }
+      }
+
+      if (payload.service_parts?.length) {
+        const demandByPart = this.sumPartQuantities(payload.service_parts);
+        const stockCheck = await this.assertStockAvailableForParts(partIds, demandByPart);
+        if (!stockCheck.ok) {
+          return { success: false, message: stockCheck.message };
         }
       }
 
@@ -334,6 +431,20 @@ export class BreakdownService {
         if (chargesError) {
           await this.deleteBreakdownServiceAndChildren(userSupabase, breakdownServiceId);
           return { success: false, message: chargesError.message };
+        }
+      }
+
+      if (payload.service_parts?.length) {
+        const stockOut = await this.insertStockMovementsOutForBreakdownService({
+          serviceId: payload.service_id,
+          serviceName: catalogServiceName,
+          breakdownId: payload.breakdown_id,
+          breakdownServiceId,
+          lines: payload.service_parts,
+        });
+        if (!stockOut.ok) {
+          await this.deleteBreakdownServiceAndChildren(userSupabase, breakdownServiceId);
+          return { success: false, message: stockOut.message };
         }
       }
 
