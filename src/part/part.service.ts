@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { supabase } from '../supabase/supabase.client';
 import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartStockDto } from './dto/update-part-stock.dto';
+import { GetMonthlyPartSaleDto } from './dto/get-monthly-part-sale.dto';
 
 @Injectable()
 export class PartService {
@@ -305,6 +306,199 @@ export class PartService {
         success: true,
         message: 'Parts fetched successfully',
         data: formattedData,
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Server error',
+      };
+    }
+  }
+
+  async getMonthlySaleForOwner(ownerUserId: string, token: string, payload: GetMonthlyPartSaleDto) {
+    try {
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
+        };
+      }
+
+      const orgContext = await this.getOrganizationContextForParts(ownerUserId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
+      const [yearStr, monthStr] = payload.month.split('-');
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return {
+          success: false,
+          message: 'month must be in YYYY-MM format',
+        };
+      }
+
+      const monthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+      const nextMonthStart = new Date(Date.UTC(year, month, 1)).toISOString();
+
+      const { data: breakdownRows, error: breakdownError } = await supabase
+        .from('breakdowns')
+        .select('id, site_id')
+        .eq('organization_id', orgContext.organizationId);
+
+      if (breakdownError) {
+        return { success: false, message: breakdownError.message };
+      }
+
+      const breakdownList =
+        (breakdownRows as Array<{
+          id: string;
+          site_id: string | null;
+        }> | null) ?? [];
+
+      if (breakdownList.length === 0) {
+        return {
+          success: true,
+          message: 'Monthly part sales fetched successfully',
+          data: {
+            summary: {
+              total_quantity_sold: 0,
+              grand_total: 0,
+            },
+            site_wise: [],
+          },
+        };
+      }
+
+      const breakdownIds = breakdownList.map((row) => row.id);
+      const siteIds = Array.from(
+        new Set(
+          breakdownList
+            .map((row) => row.site_id)
+            .filter((siteId): siteId is string => typeof siteId === 'string' && siteId.length > 0),
+        ),
+      );
+
+      const siteNameById = new Map<string, string>();
+      if (siteIds.length > 0) {
+        const { data: siteRows, error: siteError } = await supabase
+          .from('sites')
+          .select('id, site_name')
+          .in('id', siteIds);
+
+        if (siteError) {
+          return { success: false, message: siteError.message };
+        }
+
+        for (const row of (siteRows as Array<{ id: string; site_name: string | null }> | null) ?? []) {
+          siteNameById.set(row.id, row.site_name ?? 'Unknown Site');
+        }
+      }
+
+      const siteByBreakdownId = new Map<string, string>();
+      for (const row of breakdownList) {
+        siteByBreakdownId.set(
+          row.id,
+          row.site_id ? (siteNameById.get(row.site_id) ?? 'Unknown Site') : 'Unknown Site',
+        );
+      }
+
+      const { data: breakdownServiceRows, error: breakdownServiceError } = await supabase
+        .from('breakdown_services')
+        .select('id, breakdown_id')
+        .in('breakdown_id', breakdownIds);
+
+      if (breakdownServiceError) {
+        return { success: false, message: breakdownServiceError.message };
+      }
+
+      const breakdownServiceList =
+        (breakdownServiceRows as Array<{ id: string; breakdown_id: string }> | null) ?? [];
+
+      if (breakdownServiceList.length === 0) {
+        return {
+          success: true,
+          message: 'Monthly part sales fetched successfully',
+          data: {
+            summary: {
+              total_quantity_sold: 0,
+              grand_total: 0,
+            },
+            site_wise: [],
+          },
+        };
+      }
+
+      const breakdownServiceIds = breakdownServiceList.map((row) => row.id);
+      const siteByBreakdownServiceId = new Map<string, string>();
+      for (const row of breakdownServiceList) {
+        siteByBreakdownServiceId.set(
+          row.id,
+          siteByBreakdownId.get(row.breakdown_id) ?? 'Unknown Site',
+        );
+      }
+
+      const { data: servicePartRows, error: servicePartError } = await supabase
+        .from('service_parts')
+        .select('breakdown_service_id, quantity, total')
+        .eq('part_id', payload.part_id)
+        .gte('created_at', monthStart)
+        .lt('created_at', nextMonthStart)
+        .in('breakdown_service_id', breakdownServiceIds);
+
+      if (servicePartError) {
+        return { success: false, message: servicePartError.message };
+      }
+
+      const salesList =
+        (servicePartRows as Array<{
+          breakdown_service_id: string;
+          quantity: number | string;
+          total: number | string;
+        }> | null) ?? [];
+
+      const aggregate = new Map<string, { site_name: string; part_quantity: number; total: number }>();
+      for (const row of salesList) {
+        const siteName = siteByBreakdownServiceId.get(row.breakdown_service_id) ?? 'Unknown Site';
+        const quantity = Number(row.quantity) || 0;
+        const total = Number(row.total) || 0;
+        const current = aggregate.get(siteName) ?? {
+          site_name: siteName,
+          part_quantity: 0,
+          total: 0,
+        };
+        current.part_quantity += quantity;
+        current.total += total;
+        aggregate.set(siteName, current);
+      }
+
+      const siteWiseSales = Array.from(aggregate.values()).map((item) => ({
+        site_name: item.site_name,
+        part_quantity: item.part_quantity,
+        total: Number(item.total.toFixed(2)),
+      }));
+
+      const summary = siteWiseSales.reduce(
+        (acc, item) => {
+          acc.total_quantity_sold += item.part_quantity;
+          acc.grand_total += item.total;
+          return acc;
+        },
+        { total_quantity_sold: 0, grand_total: 0 },
+      );
+
+      return {
+        success: true,
+        message: 'Monthly part sales fetched successfully',
+        data: {
+          summary: {
+            total_quantity_sold: summary.total_quantity_sold,
+            grand_total: Number(summary.grand_total.toFixed(2)),
+          },
+          site_wise: siteWiseSales,
+        },
       };
     } catch {
       return {

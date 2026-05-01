@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { createClient } from '@supabase/supabase-js';
 import { authClient, supabase } from '../supabase/supabase.client';
 import { CreateUserDto } from './create-user.dto';
 
@@ -85,7 +84,11 @@ export class UserService {
         };
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Use authClient (anon key), not the service-role supabase singleton.
+      // signInWithPassword on the service client attaches a user session to that
+      // singleton so later admin .from() calls run as that user and hit RLS
+      // (e.g. staff insert into users for another id fails).
+      const { data, error } = await authClient.auth.signInWithPassword({
         email,
         password,
       });
@@ -110,7 +113,7 @@ export class UserService {
         };
       }
 
-      const { data: publicUser, error: publicUserError } = await supabase
+      const { data: publicUser, error: publicUserError } = await authClient
         .from('users')
         .select('*')
         .eq('id', authUserId)

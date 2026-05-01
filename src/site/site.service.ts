@@ -47,6 +47,7 @@ export class SiteService {
         organization_id: orgContext.organizationId,
         site_name: payload.site_name,
         address: payload.address,
+        location: payload.location,
         contact_person: payload.contact_person,
         email: payload.email,
         phone: payload.phone,
@@ -122,7 +123,9 @@ export class SiteService {
 
       const { data, error } = await supabase
         .from('amc_contracts')
-        .select('*, sites (id, site_name, address, contact_person, email, phone)')
+        .select(
+          '*, sites (id, site_name, address, location, contact_person, email, phone)',
+        )
         .eq('organization_id', orgContext.organizationId)
         .gte('end_date', todayStr)
         .lte('end_date', expiryDateStr)

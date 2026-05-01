@@ -12,6 +12,11 @@ export class CreateSiteDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(300)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(120)
   contact_person?: string;
 

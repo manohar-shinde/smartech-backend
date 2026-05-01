@@ -305,7 +305,9 @@ export class AmcContractService {
 
       const { data, error } = await supabase
         .from('amc_contracts')
-        .select('*, sites (id, site_name, address, contact_person, email, phone)')
+        .select(
+          '*, sites (id, site_name, address, location, contact_person, email, phone)',
+        )
         .eq('organization_id', organizationId)
         .gte('end_date', todayStr)
         .lte('end_date', expiryDateStr)
