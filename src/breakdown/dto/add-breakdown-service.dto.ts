@@ -31,6 +31,12 @@ export class AddBreakdownServicePartDto {
   @Min(0)
   discount!: number;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  tax?: number;
+
   /** If omitted, computed as price × quantity */
   @IsOptional()
   @Type(() => Number)
@@ -48,6 +54,12 @@ export class AddBreakdownServiceChargeDto {
   @IsNumber()
   @Min(0)
   price!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  tax?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -89,16 +101,44 @@ export class AddBreakdownServiceDto {
   @Min(0)
   service_charge!: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(100)
-  discount_percent!: number;
+  discount_percent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discount_percentage?: number;
 
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   discount_amount!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  tax?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  tax_percentage?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  tax_amount?: number;
 
   @IsOptional()
   @IsString()

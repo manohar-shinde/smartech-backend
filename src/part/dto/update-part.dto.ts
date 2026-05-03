@@ -5,10 +5,14 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Min,
 } from 'class-validator';
 
-export class CreatePartDto {
+export class UpdatePartDto {
+  @IsUUID()
+  part_id!: string;
+
   @IsNotEmpty()
   @IsString()
   part_name!: string;
@@ -40,10 +44,4 @@ export class CreatePartDto {
   @IsOptional()
   @IsString()
   serial_number?: string | null;
-
-  @IsDefined()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  quantity!: number;
 }

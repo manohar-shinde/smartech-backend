@@ -25,6 +25,7 @@ export class AmcContractController {
   async createForSite(@Req() req: any, @Body() body: CreateAmcContractDto, @Res() res: Response) {
     const result = await this.amcContractService.createForSite(
       req?.user?.id,
+      req?.token,
       body.site_id,
       body,
     );
@@ -80,7 +81,7 @@ export class AmcContractController {
     @Body() body: RenewAmcContractDto,
     @Res() res: Response,
   ) {
-    const result = await this.amcContractService.renew(req?.user?.id, id, body);
+    const result = await this.amcContractService.renew(req?.user?.id, req?.token, id, body);
     if (!result.success) {
       return res.status(getErrorStatusCode(result)).json(result);
     }

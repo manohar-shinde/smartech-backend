@@ -13,6 +13,7 @@ import { FileModule } from './file/file.module';
 import { BreakdownModule } from './breakdown/breakdown.module';
 import { AmcContractModule } from './amc-contract/amc-contract.module';
 import { ServiceModule } from './service/service.module';
+import { QuotationModule } from './quotation/quotation.module';
 import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { InvoiceModule } from './invoice/invoice.module';
     BreakdownModule,
     AmcContractModule,
     ServiceModule,
+    QuotationModule,
     InvoiceModule,
   ],
   controllers: [AppController],

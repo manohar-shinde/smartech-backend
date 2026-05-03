@@ -11,7 +11,8 @@ export function getErrorStatusCode(result: ServiceResult): number {
   if (
     message.includes('not authenticated') ||
     message.includes('unauthorized') ||
-    message.includes('invalid login session')
+    message.includes('invalid login session') ||
+    message.includes('invalid email or password')
   ) {
     return HttpStatus.UNAUTHORIZED;
   }

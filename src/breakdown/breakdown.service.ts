@@ -330,22 +330,26 @@ export class BreakdownService {
         }
       }
 
-      let notes: string | null =
+      const notes: string | null =
         payload.notes !== undefined && String(payload.notes).trim() !== ''
           ? String(payload.notes)
           : null;
-      if (payload.discount_percent > 0) {
-        const tag = `[discount ${payload.discount_percent}%]`;
-        notes = notes ? `${notes} ${tag}` : tag;
-      }
+      const discountPct =
+        payload.discount_percentage ?? payload.discount_percent ?? 0;
+
+      const taxPct = payload.tax_percentage ?? payload.tax ?? 0;
+      const taxAmt = payload.tax_amount ?? 0;
 
       const breakdownServiceRow = {
         breakdown_id: payload.breakdown_id,
         service_id: payload.service_id,
         notes,
         total: this.roundMoney(payload.total_cost),
-        discount: this.roundMoney(payload.discount_amount),
         subtotal: this.roundMoney(payload.subtotal),
+        discount_amount: this.roundMoney(payload.discount_amount),
+        discount_percentage: this.roundMoney(discountPct),
+        tax_amount: this.roundMoney(taxAmt),
+        tax_percentage: this.roundMoney(taxPct),
       };
 
       const { data: breakdownService, error: bsError } = await userSupabase
@@ -524,7 +528,7 @@ export class BreakdownService {
 
       // 1) breakdown_services — only columns exposed in API
       const breakdownServiceSelect =
-        'id, breakdown_id, service_id, notes, total, status, created_at, discount, subtotal, invoice_path';
+        'id, breakdown_id, service_id, notes, total, status, created_at, subtotal, discount_amount, discount_percentage, tax_amount, tax_percentage, quotation_id';
       const { data: breakdownServiceRows, error: bsError } = await userSupabase
         .from('breakdown_services')
         .select(breakdownServiceSelect)
@@ -544,8 +548,68 @@ export class BreakdownService {
         };
       }
 
-      const breakdownServiceIds = rows.map((r: { id: string }) => r.id);
-      const serviceIds = [...new Set(rows.map((r: { service_id: string }) => r.service_id))];
+      /** Omit breakdown services whose quotation is terminal (not shown in list). */
+      const excludedQuotationStatuses = new Set(['rejected', 'expired']);
+
+      const quotationIdsForFilter = [
+        ...new Set(
+          rows
+            .map((r) => (r as { quotation_id?: string | null }).quotation_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      ];
+      type QuotationJoin = {
+        file_path: string | null;
+        status: unknown;
+        is_invoiced: boolean | null;
+      };
+      const quotationById = new Map<string, QuotationJoin>();
+      if (quotationIdsForFilter.length > 0) {
+        const { data: quotationRows, error: qErr } = await supabase
+          .from('quotations')
+          .select('id, file_path, status, is_invoiced')
+          .in('id', quotationIdsForFilter)
+          .eq('organization_id', orgContext.organizationId);
+        if (qErr) {
+          return { success: false, message: qErr.message };
+        }
+        for (const q of quotationRows ?? []) {
+          const rec = q as {
+            id: string;
+            file_path: string | null;
+            status: unknown;
+            is_invoiced?: unknown;
+          };
+          quotationById.set(rec.id, {
+            file_path: rec.file_path ?? null,
+            status: rec.status ?? null,
+            is_invoiced:
+              rec.is_invoiced === null || rec.is_invoiced === undefined
+                ? null
+                : Boolean(rec.is_invoiced),
+          });
+        }
+      }
+
+      const visibleRows = rows.filter((r) => {
+        const qid = (r as { quotation_id?: string | null }).quotation_id;
+        if (!qid || typeof qid !== 'string') {
+          return true;
+        }
+        const st = quotationById.get(qid)?.status;
+        return !excludedQuotationStatuses.has(String(st ?? ''));
+      });
+
+      if (visibleRows.length === 0) {
+        return {
+          success: true,
+          message: 'Breakdown services retrieved successfully',
+          data: [],
+        };
+      }
+
+      const breakdownServiceIds = visibleRows.map((r: { id: string }) => r.id);
+      const serviceIds = [...new Set(visibleRows.map((r: { service_id: string }) => r.service_id))];
 
       // 2) services — id only for join; response keeps name, description, service_type, is_amc
       const { data: serviceRows, error: servicesError } = await userSupabase
@@ -719,7 +783,7 @@ export class BreakdownService {
         list.sort(sortByCreatedAt);
       }
 
-      const data = rows.map((row: Record<string, unknown> & { id: string; service_id: string }) => ({
+      const data = visibleRows.map((row: Record<string, unknown> & { id: string; service_id: string }) => ({
         id: row.id,
         breakdown_id: row.breakdown_id,
         service_id: row.service_id,
@@ -727,9 +791,24 @@ export class BreakdownService {
         total: row.total,
         status: row.status,
         created_at: row.created_at,
-        discount: row.discount,
         subtotal: row.subtotal,
-        invoice_path: row.invoice_path,
+        discount_amount: row.discount_amount,
+        discount_percentage: row.discount_percentage,
+        tax_amount: row.tax_amount,
+        tax_percentage: row.tax_percentage,
+        invoice_path:
+          typeof row.quotation_id === 'string' && row.quotation_id
+            ? (quotationById.get(row.quotation_id)?.file_path ?? null)
+            : null,
+        quotation_status:
+          typeof row.quotation_id === 'string' && row.quotation_id
+            ? (quotationById.get(row.quotation_id)?.status ?? null)
+            : null,
+        is_invoiced:
+          typeof row.quotation_id === 'string' && row.quotation_id
+            ? (quotationById.get(row.quotation_id)?.is_invoiced ?? null)
+            : null,
+        quotation_id: row.quotation_id,
         service: serviceById.get(row.service_id) ?? null,
         service_charges: chargesByBreakdownServiceId.get(row.id) ?? [],
         service_parts: partsByBreakdownServiceId.get(row.id) ?? [],

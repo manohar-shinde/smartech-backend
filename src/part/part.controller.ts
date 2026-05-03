@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PartService } from './part.service';
 import { CreatePartDto } from './dto/create-part.dto';
+import { DeletePartDto } from './dto/delete-part.dto';
+import { UpdatePartDto } from './dto/update-part.dto';
 import { UpdatePartStockDto } from './dto/update-part-stock.dto';
 import { GetMonthlyPartSaleDto } from './dto/get-monthly-part-sale.dto';
 import { getErrorStatusCode } from 'src/common/http-status.util';
@@ -25,6 +27,36 @@ export class PartController {
       return res.status(getErrorStatusCode(result)).json(result);
     }
     return res.status(201).json(result);
+  }
+
+  @Patch('update')
+  async updatePart(
+    @Req() req: any,
+    @Body() body: UpdatePartDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.partService.updatePartForOwner(
+      req?.user?.id,
+      req?.token,
+      body,
+    );
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  @Patch('delete')
+  async softDeletePart(
+    @Req() req: any,
+    @Body() body: DeletePartDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.partService.softDeletePart(req?.user?.id, body);
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
   }
 
   @Post('update-stock')

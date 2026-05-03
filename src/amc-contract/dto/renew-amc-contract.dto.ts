@@ -1,4 +1,12 @@
-import { IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class RenewAmcContractDto {
   @IsOptional()
@@ -7,6 +15,12 @@ export class RenewAmcContractDto {
 
   @IsDateString()
   end_date!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  contract_amount?: number;
 
   @IsOptional()
   @IsString()

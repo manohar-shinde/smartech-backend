@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -11,6 +12,8 @@ import {
 import type { Response } from 'express';
 import { SiteService } from './site.service';
 import { CreateSiteDto } from './dto/create-site.dto';
+import { DeleteSiteDto } from './dto/delete-site.dto';
+import { UpdateSiteDto } from './dto/update-site.dto';
 import { getErrorStatusCode } from 'src/common/http-status.util';
 
 @Controller('site')
@@ -36,6 +39,32 @@ export class SiteController {
   @Get('getAll')
   async findAllForUser(@Req() req: any, @Res() res: Response) {
     const result = await this.siteService.findAllForUser(req?.user?.id);
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  @Patch('delete')
+  async softDeleteSite(
+    @Req() req: any,
+    @Body() body: DeleteSiteDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.siteService.softDeleteSite(req?.user?.id, body);
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  @Patch('update')
+  async updateSite(
+    @Req() req: any,
+    @Body() body: UpdateSiteDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.siteService.updateSite(req?.user?.id, body);
     if (!result.success) {
       return res.status(getErrorStatusCode(result)).json(result);
     }

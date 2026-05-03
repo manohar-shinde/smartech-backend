@@ -13,6 +13,15 @@ export const authClient = createClient(
   process.env.SUPABASE_ANON_KEY!,
 );
 
+/** Anon client for one-off auth flows (e.g. password change) so sign-in does not attach a session to shared `authClient`. */
+export const createEphemeralAnonClient = () =>
+  createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
 export const getUserSupabaseClient = (accessToken: string) =>
   createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
     global: {

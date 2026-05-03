@@ -357,6 +357,45 @@ export class FileService {
     }
   }
 
+  /**
+   * Stable app URL to open a `private-files` object via `GET /file/open?path=…` (same access
+   * checks as {@link getPrivateFileDownloadUrl}). No expiry in the API response; each open
+   * mints a short-lived signed URL server-side — same pattern as listing `app_file_url` for uploads.
+   */
+  async getPrivateFileOpenAppUrl(userId: string, filePath: string) {
+    try {
+      if (!userId) {
+        return { success: false, message: 'User is not authenticated' };
+      }
+
+      const objectPath = typeof filePath === 'string' ? filePath.trim() : '';
+      if (!this.isPrivateBucketPathPlausible(objectPath)) {
+        return { success: false, message: 'Invalid file path' };
+      }
+
+      const canRead = await this.userCanReadPrivatePath(userId, objectPath);
+      if (!canRead) {
+        return {
+          success: false,
+          message: 'Forbidden: you do not have access to this file',
+        };
+      }
+
+      const fileName = objectPath.split('/').filter(Boolean).pop() ?? 'file';
+      return {
+        success: true,
+        data: {
+          bucket: this.privateBucket,
+          object_path: objectPath,
+          file_name: fileName,
+          open_url: this.buildAppFileUrl(objectPath),
+        },
+      };
+    } catch {
+      return { success: false, message: 'Server error' };
+    }
+  }
+
   private clampSignedUrlTtl(raw: number) {
     const n = Number.isFinite(raw) ? raw : 60 * 10;
     return Math.min(Math.max(Math.floor(n), 60), 3600);

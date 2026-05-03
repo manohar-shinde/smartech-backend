@@ -83,7 +83,6 @@ export class OrganizationService {
         {
           user_id: userId,
           organization_id: data.id,
-          role: 'OWNER',
         },
       ]);
 
@@ -98,6 +97,77 @@ export class OrganizationService {
       return {
         success: true,
         message: 'Company profile created successfully',
+        data,
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Server error',
+      };
+    }
+  }
+
+  /** Update the authenticated user's organization; fails if none exists (use POST /organization to create). */
+  async updateOrganizationForUser(userId: string, payload: UpsertOrganizationDto) {
+    try {
+      if (!userId) {
+        return {
+          success: false,
+          message: 'User is not authenticated',
+        };
+      }
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingError) {
+        return {
+          success: false,
+          message: existingError.message,
+        };
+      }
+
+      const existingId = existingRows?.[0]?.id as string | undefined;
+      if (!existingId) {
+        return {
+          success: false,
+          message: 'Organization not found',
+        };
+      }
+
+      const companyPayload = {
+        logo: payload?.logo,
+        company_name: payload?.company_name,
+        address: payload?.address,
+        contact_person: payload?.contact_person,
+        phone: payload?.phone,
+        email: payload?.email,
+        gst: payload?.gst,
+        pan: payload?.pan,
+        site: payload?.site,
+      };
+
+      const { data, error } = await supabase
+        .from('organizations')
+        .update(companyPayload)
+        .eq('id', existingId)
+        .select()
+        .single();
+
+      if (error) {
+        return {
+          success: false,
+          message: error.message,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Company details updated successfully',
         data,
       };
     } catch {
@@ -196,7 +266,6 @@ export class OrganizationService {
         {
           user_id: userId,
           organization_id: data.id,
-          role: 'OWNER',
         },
       ]);
 
@@ -248,14 +317,6 @@ export class OrganizationService {
           success: false,
           message: error.message,
         };
-      }
-      if (data && data?.logo) {
-        const { data: file, error: fileError } = await userSupabase.storage
-          .from(this.privateBucket)
-          .createSignedUrls([data?.logo], 60 * 60);
-        if (file) {
-          data.logo = file?.[0].signedUrl;
-        }
       }
       return {
         success: true,

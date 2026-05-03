@@ -16,8 +16,14 @@ export type QuotationPdfInvoice = {
   customer_phone: string | null;
   customer_address: string | null;
   subtotal: number;
+  /** Discount amount (currency). */
   discount: number;
+  /** If set, label shows `Discount (${…}%)` in the left totals cell. */
+  discount_percentage?: number | null;
+  /** Tax amount (currency). */
   tax: number;
+  /** If set, label shows `Tax (${…}%)` in the left totals cell. */
+  tax_percentage?: number | null;
   total: number;
   created_at?: string | null;
 };
@@ -30,11 +36,23 @@ export type QuotationPdfItem = {
   total: number;
 };
 
-function money(n: number): string {
+export function money(n: number): string {
   return (Number.isFinite(n) ? n : 0).toFixed(2);
 }
 
-function formatQuotationDate(iso: string | null | undefined): string {
+/** Human-readable percentage for labels like `Discount (5%)`. */
+export function pctInParens(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined) return '';
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return '';
+  const rounded = Math.round(n * 100) / 100;
+  const s = Number.isInteger(rounded)
+    ? String(rounded)
+    : String(rounded).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return ` (${s}%)`;
+}
+
+export function formatQuotationDate(iso: string | null | undefined): string {
   if (!iso) return new Date().toLocaleDateString();
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? new Date().toLocaleDateString() : d.toLocaleDateString();
@@ -42,7 +60,7 @@ function formatQuotationDate(iso: string | null | undefined): string {
 
 type PdfDoc = InstanceType<typeof PDFDocument>;
 
-function drawRule(
+export function drawRule(
   doc: PdfDoc,
   y: number,
   left: number,
@@ -56,7 +74,7 @@ function drawRule(
   doc.restore();
 }
 
-async function tryFetchLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
+export async function tryFetchLogoBuffer(logoUrl: string | null | undefined): Promise<Buffer | null> {
   const trimmed = logoUrl?.trim();
   if (!trimmed || !/^https?:\/\//i.test(trimmed)) {
     return null;
@@ -269,8 +287,14 @@ export async function buildQuotationPdfBuffer(params: {
   const fontSize = 10;
   const rows: { label: string; value: string; bold?: boolean }[] = [
     { label: 'Subtotal', value: money(invoice.subtotal) },
-    { label: 'Discount', value: money(invoice.discount) },
-    { label: 'Tax', value: money(invoice.tax) },
+    {
+      label: `Discount${pctInParens(invoice.discount_percentage)}`,
+      value: money(invoice.discount),
+    },
+    {
+      label: `Tax${pctInParens(invoice.tax_percentage)}`,
+      value: money(invoice.tax),
+    },
     { label: 'Total', value: money(invoice.total), bold: true },
   ];
 

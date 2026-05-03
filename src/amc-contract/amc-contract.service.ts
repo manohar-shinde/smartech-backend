@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InvoiceService } from 'src/invoice/invoice.service';
 import { supabase } from 'src/supabase/supabase.client';
 import { CreateAmcContractDto } from './dto/create-amc-contract.dto';
 import { UpdateAmcContractDto } from './dto/update-amc-contract.dto';
@@ -12,6 +13,8 @@ type FindOneErr = { success: false; message: string };
 
 @Injectable()
 export class AmcContractService {
+  constructor(private readonly invoiceService: InvoiceService) {}
+
   private async getOrganizationIdForOwner(
     userId: string,
   ): Promise<OrgContextOk | OrgContextErr> {
@@ -59,10 +62,18 @@ export class AmcContractService {
     return new Date(endDate).getTime() <= new Date(startDate).getTime();
   }
 
-  async createForSite(userId: string, siteId: string, payload: CreateAmcContractDto) {
+  async createForSite(
+    userId: string,
+    token: string | undefined,
+    siteId: string,
+    payload: CreateAmcContractDto,
+  ) {
     try {
       if (!userId) {
         return { success: false, message: 'User is not authenticated' };
+      }
+      if (!token) {
+        return { success: false, message: 'Access token is required' };
       }
       if (!siteId) {
         return { success: false, message: 'Site ID is required' };
@@ -93,6 +104,7 @@ export class AmcContractService {
             organization_id: organizationId,
             start_date: payload.start_date,
             end_date: payload.end_date,
+            contract_amount: payload.contract_amount,
             status: payload.status || 'active',
             notes: payload.notes || null,
           },
@@ -104,10 +116,28 @@ export class AmcContractService {
         return { success: false, message: error.message };
       }
 
+      const contractId = (data as { id?: string }).id;
+      const invoiceResult = await this.invoiceService.createForAmcContract(userId, token, {
+        organizationId,
+        siteId,
+        contractAmount: Number(payload.contract_amount),
+      });
+
+      if (!invoiceResult.success) {
+        if (contractId) {
+          await supabase.from('amc_contracts').delete().eq('id', contractId);
+        }
+        return {
+          success: false,
+          message: invoiceResult.message || 'Failed to create invoice for AMC contract',
+        };
+      }
+
       return {
         success: true,
         message: 'AMC contract created successfully',
         data,
+        invoice: invoiceResult.data,
       };
     } catch {
       return { success: false, message: 'Server error' };
@@ -250,7 +280,12 @@ export class AmcContractService {
     }
   }
 
-  async renew(userId: string, contractId: string, payload: RenewAmcContractDto) {
+  async renew(
+    userId: string,
+    token: string | undefined,
+    contractId: string,
+    payload: RenewAmcContractDto,
+  ) {
     try {
       const current = await this.findOne(userId, contractId);
       if (!current.success) {
@@ -271,10 +306,13 @@ export class AmcContractService {
         return { success: false, message: 'end_date must be after start_date' };
       }
 
-      return this.createForSite(userId, previous.site_id, {
+      return this.createForSite(userId, token, previous.site_id, {
         site_id: previous.site_id,
         start_date: startDate,
         end_date: payload.end_date,
+        contract_amount:
+          payload.contract_amount ??
+          Number((current.data as { contract_amount?: unknown }).contract_amount ?? 0),
         notes: payload.notes,
         status: 'active',
       });

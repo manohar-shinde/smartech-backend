@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { supabase } from '../supabase/supabase.client';
 import { CreatePartDto } from './dto/create-part.dto';
+import { UpdatePartDto } from './dto/update-part.dto';
 import { UpdatePartStockDto } from './dto/update-part-stock.dto';
+import { DeletePartDto } from './dto/delete-part.dto';
 import { GetMonthlyPartSaleDto } from './dto/get-monthly-part-sale.dto';
 
 @Injectable()
@@ -32,28 +34,47 @@ export class PartService {
         };
       }
 
-      if (!payload?.sku) {
+      if (
+        payload.cost_price === undefined ||
+        payload.cost_price === null ||
+        Number.isNaN(Number(payload.cost_price))
+      ) {
         return {
           success: false,
-          message: 'sku is required',
+          message: 'cost_price is required',
         };
       }
 
       if (
-        (payload.cost_price !== undefined && payload.cost_price < 0) ||
-        (payload.sell_price !== undefined && payload.sell_price < 0) ||
-        (payload.quantity !== undefined && payload.quantity < 0)
+        payload.sell_price === undefined ||
+        payload.sell_price === null ||
+        Number.isNaN(Number(payload.sell_price))
+      ) {
+        return {
+          success: false,
+          message: 'sell_price is required',
+        };
+      }
+
+      if (
+        payload.quantity === undefined ||
+        payload.quantity === null ||
+        Number.isNaN(Number(payload.quantity))
+      ) {
+        return {
+          success: false,
+          message: 'quantity is required',
+        };
+      }
+
+      if (
+        payload.cost_price < 0 ||
+        payload.sell_price < 0 ||
+        payload.quantity < 0
       ) {
         return {
           success: false,
           message: 'cost_price, sell_price and quantity must be non-negative',
-        };
-      }
-
-      if ((payload.quantity ?? 0) <= 0) {
-        return {
-          success: false,
-          message: 'quantity is required and must be greater than 0',
         };
       }
 
@@ -65,12 +86,14 @@ export class PartService {
           {
             organization_id: orgContext.organizationId,
             part_name: payload.part_name,
-            sku: payload.sku,
+            sku: payload.sku ?? null,
             description: payload.description,
-            cost_price: payload.cost_price ?? 0,
-            sell_price: payload.sell_price ?? 0,
+            cost_price: payload.cost_price,
+            sell_price: payload.sell_price,
             image: payload.image,
-            serial_number: payload.serial_number,
+            serial_number: payload.serial_number ?? null,
+            is_deleted: false,
+            deleted_at: null,
           },
         ])
         .select()
@@ -131,6 +154,166 @@ export class PartService {
     }
   }
 
+  async updatePartForOwner(ownerUserId: string, token: string, payload: UpdatePartDto) {
+    try {
+      if (!token) {
+        return {
+          success: false,
+          message: 'Access token is required',
+        };
+      }
+
+      const orgContext = await this.getOrganizationContextForParts(ownerUserId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
+      if (!payload?.part_name) {
+        return {
+          success: false,
+          message: 'part_name is required',
+        };
+      }
+
+      if (
+        payload.cost_price === undefined ||
+        payload.cost_price === null ||
+        Number.isNaN(Number(payload.cost_price))
+      ) {
+        return {
+          success: false,
+          message: 'cost_price is required',
+        };
+      }
+
+      if (
+        payload.sell_price === undefined ||
+        payload.sell_price === null ||
+        Number.isNaN(Number(payload.sell_price))
+      ) {
+        return {
+          success: false,
+          message: 'sell_price is required',
+        };
+      }
+
+      if (payload.cost_price < 0 || payload.sell_price < 0) {
+        return {
+          success: false,
+          message: 'cost_price and sell_price must be non-negative',
+        };
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from('parts')
+        .select('id')
+        .eq('id', payload.part_id)
+        .eq('organization_id', orgContext.organizationId)
+        .or('is_deleted.eq.false,is_deleted.is.null')
+        .maybeSingle();
+
+      if (existingError) {
+        return { success: false, message: existingError.message };
+      }
+      if (!existing?.id) {
+        return { success: false, message: 'Part not found' };
+      }
+
+      const { data, error } = await supabase
+        .from('parts')
+        .update({
+          part_name: payload.part_name,
+          sku: payload.sku ?? null,
+          description: payload.description,
+          cost_price: payload.cost_price,
+          sell_price: payload.sell_price,
+          image: payload.image,
+          serial_number: payload.serial_number ?? null,
+        })
+        .eq('id', payload.part_id)
+        .eq('organization_id', orgContext.organizationId)
+        .or('is_deleted.eq.false,is_deleted.is.null')
+        .select()
+        .single();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      return {
+        success: true,
+        message: 'Part updated successfully',
+        data,
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Server error',
+      };
+    }
+  }
+
+  async softDeletePart(ownerUserId: string, payload: DeletePartDto) {
+    try {
+      const orgContext = await this.getOrganizationContextForParts(ownerUserId);
+      if (!orgContext.success) {
+        return orgContext;
+      }
+
+      const { data: part, error: partError } = await supabase
+        .from('parts')
+        .select('id, is_deleted')
+        .eq('id', payload.part_id)
+        .eq('organization_id', orgContext.organizationId)
+        .maybeSingle();
+
+      if (partError) {
+        return { success: false, message: partError.message };
+      }
+      if (!part?.id) {
+        return { success: false, message: 'Part not found' };
+      }
+
+      const row = part as { id: string; is_deleted: boolean | null };
+      if (row.is_deleted === true) {
+        return {
+          success: false,
+          message: 'Part is already removed',
+        };
+      }
+
+      const deletedAt = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from('parts')
+        .update({
+          is_deleted: true,
+          deleted_at: deletedAt,
+        })
+        .eq('id', row.id)
+        .eq('organization_id', orgContext.organizationId);
+
+      if (updateError) {
+        return { success: false, message: updateError.message };
+      }
+
+      return {
+        success: true,
+        message: 'Part removed successfully',
+        data: {
+          part_id: row.id,
+          is_deleted: true,
+          deleted_at: deletedAt,
+        },
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Server error',
+      };
+    }
+  }
+
   /**
    * Adds to on-hand stock by inserting one `IN` movement (`quantity` is added to whatever
    * was already in `stock` once the trigger runs).
@@ -160,6 +343,7 @@ export class PartService {
         .select('id')
         .eq('id', payload.part_id)
         .eq('organization_id', orgContext.organizationId)
+        .or('is_deleted.eq.false,is_deleted.is.null')
         .maybeSingle();
 
       if (partError) {
@@ -259,6 +443,7 @@ export class PartService {
         .from('parts')
         .select('*')
         .eq('organization_id', orgContext.organizationId)
+        .or('is_deleted.eq.false,is_deleted.is.null')
         .order('created_at', { ascending: false });
 
       if (error) {

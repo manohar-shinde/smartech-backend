@@ -1,10 +1,14 @@
+import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsDefined,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class CreateAmcContractDto {
@@ -19,6 +23,12 @@ export class CreateAmcContractDto {
   @IsNotEmpty()
   @IsDateString()
   end_date!: string;
+
+  @IsDefined()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  contract_amount!: number;
 
   @IsOptional()
   @IsString()

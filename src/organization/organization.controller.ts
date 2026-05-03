@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { OrganizationService } from './organization.service';
 import { UpsertOrganizationDto } from './dto/upsert-organization.dto';
@@ -25,6 +25,7 @@ export class OrganizationController {
     return res.status(201).json(result);
   }
 
+  /** Create or update organization for the user (insert if none exists). */
   @Post()
   async upsertOrganization(
     @Req() req: any,
@@ -32,6 +33,23 @@ export class OrganizationController {
     @Res() res: Response,
   ) {
     const result = await this.organizationService.upsertOrganizationForUser(
+      req?.user?.id,
+      body,
+    );
+    if (!result.success) {
+      return res.status(getErrorStatusCode(result)).json(result);
+    }
+    return res.status(200).json(result);
+  }
+
+  /** Update only; returns 404 if the user has no organization yet. */
+  @Patch('update')
+  async updateOrganization(
+    @Req() req: any,
+    @Body() body: UpsertOrganizationDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.organizationService.updateOrganizationForUser(
       req?.user?.id,
       body,
     );
